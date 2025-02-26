@@ -58,8 +58,36 @@ language_options = {
 }
 target_lang = st.selectbox("Select language:", list(language_options.keys()))
 
-# Record and process voice
-if st.button("🎙️ Record Voice"):
+# Option for uploading an audio file (for when microphone isn't available)
+audio_file = st.file_uploader("Or Upload an Audio File", type=["wav", "mp3"])
+
+if audio_file is not None:
+    # Save the uploaded file
+    with open("uploaded_audio.wav", "wb") as f:
+        f.write(audio_file.getbuffer())
+
+    # Process the uploaded audio file
+    recognizer = sr.Recognizer()
+    with sr.AudioFile("uploaded_audio.wav") as source:
+        audio = recognizer.record(source)
+    
+    try:
+        print("Recognizing speech...")
+        text = recognizer.recognize_google(audio)
+        st.success(f"📝 You said: {text}")
+        # Translate and convert text to speech
+        if text:
+            translated_text = translate_text(text, language_options[target_lang])
+            text_to_speech(translated_text, language_options[target_lang])
+    except sr.UnknownValueError:
+        st.error("Could not understand audio")
+    except sr.RequestError:
+        st.error("API unavailable")
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+
+# Record and process voice (when microphone is available)
+elif st.button("🎙️ Record Voice"):
     text = record_voice()
     if text:
         translated_text = translate_text(text, language_options[target_lang])
