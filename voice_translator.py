@@ -4,21 +4,25 @@ from googletrans import Translator
 from gtts import gTTS
 import os
 from pydub import AudioSegment
-from pydub.playback import play
+from io import BytesIO
 
 # Function to record voice
-def record_voice():
+def record_voice(file_path=None):
     recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("🎤 Speak now...")
-        print("Adjusting for ambient noise...")
-        recognizer.adjust_for_ambient_noise(source, duration=1)  # Increased duration
-        st.info("Listening for your voice...")
-        audio = recognizer.listen(source)
-        print("Audio captured")
-
+    
+    if file_path:
+        # Process uploaded file
+        with sr.AudioFile(file_path) as source:
+            audio = recognizer.record(source)
+    else:
+        # Use microphone if no file is provided
+        with sr.Microphone() as source:
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            st.info("Listening for your voice...")
+            audio = recognizer.listen(source)
+    
     try:
-        print("Recognizing speech...")
+        st.info("Recognizing speech...")
         text = recognizer.recognize_google(audio)
         st.success(f"📝 You said: {text}")
         return text
@@ -42,7 +46,7 @@ def text_to_speech(text, lang):
     tts = gTTS(text=text, lang=lang, slow=False)
     tts.save("output.mp3")
     audio = AudioSegment.from_mp3("output.mp3")
-    play(audio)
+    audio.play()
     os.remove("output.mp3")
 
 # Streamlit UI
@@ -58,37 +62,22 @@ language_options = {
 }
 target_lang = st.selectbox("Select language:", list(language_options.keys()))
 
-# Option for uploading an audio file (for when microphone isn't available)
-audio_file = st.file_uploader("Or Upload an Audio File", type=["wav", "mp3"])
+# Upload audio file
+uploaded_file = st.file_uploader("Upload an audio file (WAV, MP3, etc.)", type=["wav", "mp3", "flac"])
 
-if audio_file is not None:
-    # Save the uploaded file
-    with open("uploaded_audio.wav", "wb") as f:
-        f.write(audio_file.getbuffer())
+if uploaded_file:
+    st.write(f"File uploaded: {uploaded_file.name}")
+    # Convert uploaded file to WAV format (if it's not already)
+    audio_data = uploaded_file.read()
+    audio = AudioSegment.from_file(BytesIO(audio_data))
+    audio.export("uploaded_audio.wav", format="wav")
 
-    # Process the uploaded audio file
-    recognizer = sr.Recognizer()
-    with sr.AudioFile("uploaded_audio.wav") as source:
-        audio = recognizer.record(source)
+    # Process uploaded file
+    text = record_voice(file_path="uploaded_audio.wav")
     
-    try:
-        print("Recognizing speech...")
-        text = recognizer.recognize_google(audio)
-        st.success(f"📝 You said: {text}")
-        # Translate and convert text to speech
-        if text:
-            translated_text = translate_text(text, language_options[target_lang])
-            text_to_speech(translated_text, language_options[target_lang])
-    except sr.UnknownValueError:
-        st.error("Could not understand audio")
-    except sr.RequestError:
-        st.error("API unavailable")
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
-
-# Record and process voice (when microphone is available)
-elif st.button("🎙️ Record Voice"):
-    text = record_voice()
     if text:
+        # Translate and convert to speech
         translated_text = translate_text(text, language_options[target_lang])
         text_to_speech(translated_text, language_options[target_lang])
+else:
+    st.info("Upload a file or speak to record voice.")
